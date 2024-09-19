@@ -1,0 +1,1178 @@
+---
+title:  "TP3 Linear Models"
+author: "A.V Hurtado Quiceno"
+date: "2/5/2023"
+output:
+  html_document:
+      toc: TRUE
+  pdf_document: 
+      
+      toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())
+
+library(FactoMineR)
+library(utils)
+library(stats)
+library(ggiraphExtra)
+library(measurements)
+library(dplyr)
+library(corrplot)
+library(kableExtra)
+library(dplyr)
+library(factoextra)
+library(car)
+library(ellipse)
+#library(devtools)
+library(webshot)
+library(tidyverse)
+library(SimDesign)
+library(ggplot2)
+library(ISwR)
+library(MASS)
+library(Sleuth3)
+library(tidyr)
+library(leaps)
+library(GGally)
+library(lmtest)
+library(car)
+library(scales)
+```
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 100px;
+}
+```
+
+```{css, echo=FALSE}
+.scroll-100 {
+  max-height: 100px;
+  overflow-y: auto;
+  background-color: inherit;
+}
+```
+
+# Descriptive {.tabset}
+
+
+## Ozone data
+
+```{r, echo=FALSE, include=FALSE}
+ozone <- read.csv("ozone.txt", header=TRUE,sep=";")
+ozone <- ozone[,-c(1,12)]
+summary(ozone)
+```
+
+## Corrplot
+
+On regarde les corrélations entre et les variables explicatives avec le corrplot. 
+
+
+```{r, echo=FALSE}
+M <- cor(ozone)
+
+kable(M, caption="", booktabs = TRUE, valign = 't') %>% kable_styling(latex_options = "striped") 
+
+corrplot(M, method="ellipse", order = "hclust")
+#pairs(ozone)
+
+#ggpairs(ozone)
+
+```
+
+Dans ce graphique, nous avons une corrélation élevée avec la couleur bleue, et aussi à partir de ce graphique particulier de type ellipse, nous pouvons vérifier si la corrélation est positive ou négative.
+
+
+# Modele avec tous les variables explicatives {.tabset}
+
+Pour commencer, nous considérons le modèle avec toutes les variables explicatives comme suit :
+
+
+```{r}
+
+res <- lm(maxO3~ T6 + T9 + T12 + T15 + T18 +Ne6 +Ne9 +Ne12 + Ne15 + Vx + maxO3v, data=ozone)
+summary(res)
+
+```
+
+
+$\textbf{Observation}:$ Le $R^2$ est plutôt bon mais beaucoup de variables ne sont pas significatives
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Analyse et normalité des résidus d’estimation, résidus studentisés {.tabset}
+
+
+Examinons maintenant les résidus d’estimation (tracez les résidus en fonction des valeurs ajustées et commentez le graphique ainsi obtenu). Examinons maintennat la normalité des résidus d’estimation:
+
+
+
+## Normalité des résidus d’estimation
+
+ * QQPLOT
+ 
+Les résidus ne suivent pas la ligne normale dans le tracé QQ, en particulier dans la queue inférieure, ce qui suggère que les données ne sont pas normalement distribuées. 
+ 
+ 
+```{r}
+qqPlot(res)
+#plot(res,which=2,sub="",main="")
+#abline(0,1)
+```
+
+ * Shapito Test for Normality
+ 
+ Laisser les hyphotesis nuls et alternatifs comme suit :
+ 
+ $$ \begin{equation}
+\begin{split}
+H_{0} &: \text{les données sont normalement distribuées}\\
+H_{1} &: \text{les données ne sont pas normalement distribuées}
+\end{split}
+\end{equation}
+$$
+ 
+Nous effectuons un test Shapiro-Wilk pour tester la normalité des résidus comme suit
+
+```{r}
+resi <- residuals(res)
+shapiro.test(resi)
+```
+
+Puisque votre $p-value=8.97e-08$ est beaucoup plus petite que 0.05, nous pouvons conclure qu’il y a des preuves solides pour rejeter l’hypothèse nulle et conclure que vos données ne sont pas normalement distribuées.  
+
+ * Kolmogorov Test: La p valeur du test de Kolmogorov est inférieure à 0,05, ce qui indique que les données ne sont pas normalement distribuées.
+
+```{r}
+ks.test(resi, 'pnorm')
+```
+
+
+
+
+
+## Histogram
+
+ * La curve est etaler, et aussi les valeurs sont entre -60 et 60, pas de -2 et 2, donc ce n’est pas normal. 
+
+
+```{r}
+#hist(residuals(res),xlab="residus d estimation",main="Histogramme des residus",breaks=20)
+ggplot(data = data.frame(residuals = residuals(res)), aes(x = residuals)) +
+  geom_histogram(binwidth = 2, aes(y = after_stat(density)), 
+                 color = "black", fill = "white") +
+  geom_density(alpha = 0.4, fill = "red") +
+  stat_function(fun = dnorm, args = list(mean = mean(residuals(res)), sd = sd(residuals(res))), color = "blue", linetype = "dashed", size = 1.5) +
+  labs(x = "Residuals", y = "Density", title = "Histogram of Residuals with Normal Distribution Curve") +
+  theme_bw()
+```
+
+
+
+
+##  Résidus studentisées
+
+En utilisant la fonction rstudent pour représenter les résidus studentisés, nous pouvons remarquer que les résidus qui tombent en dehors de l'intervalle de $[-2,2]$ peuvent signaler la présence de valeurs aberrantes potentielles ou d'observations influentes qui ont une plus grande influence sur l'ajustement du modèle. Autrement dit, ces résidus qui sont en dehors de la plage mentionnée peuvent être considérés comme des outliers.
+
+```{r} 
+#With R
+#plot(rstudent(res),ylab="Résidus studentisés par VC")
+#abline(h=c(-2,2))
+
+#With ggplot2 package
+ggplot(data.frame(residuals = rstudent(res)), aes(x = seq_along(residuals), y = residuals, color = abs(residuals))) +
+  geom_point() +
+  geom_hline(yintercept = c(-2, 2), linetype = "dashed", color = "red", size = 1) +
+  scale_color_gradient(low = "blue", high = "red", name = "Absolute Residuals") +
+  labs(x = "Observation", y = "Résidus studentisés par VC", title = "Studentized Residuals Plot with Horizontal Lines at -2 and 2") +
+  theme_bw()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Variance constante des résidus {.tabset}
+
+ * Les points dans le graphique n’ont pas une forme ou un modèle particulier, nous pouvons conclure l’hypothèse d’homoscédasticité
+
+```{r}
+ggplot(data.frame(residuals = rstudent(res), fitted = fitted(res)), 
+       aes(x = fitted, y = residuals, color = abs(residuals))) +
+  geom_point() +
+  scale_color_gradient(low = "blue", high = "red", name = "Absolute Residuals") +
+  labs(x = "Fitted values", y = "Studentized Residuals", 
+       title = " ") +
+  theme_bw()
+
+
+```
+
+
+ * Test de Breusch-Pagan par heteroscedasticity
+
+ $$ \begin{equation}
+\begin{split}
+H_{0} &: \text{the variance of the errors is constant (homoscedasticity)}\\
+H_{1} &: \text{the variance of the errors is not constant (heteroscedasticity)}
+\end{split}
+\end{equation}
+$$
+
+```{r}
+btest <- bptest(res)
+btest
+```
+
+
+
+since the p-values is $1.631e-07$ less that 0.05, we reject the null hypothesis and conclude that there is evidence of heteroscedasticity
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Détection des points leviers et influents {.tabset}
+
+Pour détercter les points leviers, on regarde les éléments diagonaux hii de la matrice hat. Cela est réalisé avec la fonction hat avec l’option intercept=TRUE. Représenter les hii pour ce jeu de données et comparer avec les valeurs seuil données dans le cours
+
+
+## Elements $h_{ii}$ de Hat matrice
+
+
+On remarque que plusieurs observations ont une valeur hii supérieure au seuil $3 ∗ (p + 1)/n$ et une seule observation depasse la valeur de 0.5:
+
+```{r}
+ozone1 <- ozone[,-1]
+h_ii <- hat(ozone[,-1], intercept = TRUE)
+head(h_ii)
+
+green <- which(h_ii > 0.05)
+
+
+```
+
+
+
+
+## Plot de $h_{ii}$
+
+
+ Nous avons beaucoup de points qui ont une valeur $h_{ii}$ supérieure à:
+ 
+  * Velleman et Wellsch :
+
+$$3* (p+1)/n \approx 0.029$$
+
+ * Hoaglin et Welsch :
+
+
+$$2*(p+1)/n\approx 0.019$$
+
+et nous avons un point unique supérieur à 0,05 qui est en bleu. 
+
+$\textbf{Observation:}$
+
+Mais remarquez que je n’ai trouvé aucun point plus grand que $0.5$.  
+
+
+```{r, echo=FALSE}
+n <- nrow(ozone1)
+pplus1 <- ncol(ozone1)
+n1 <- 1353
+pplus11 <- 13
+p <- 3 * (pplus1/n)
+seuil11 <- 3 * (pplus11/n1)
+seul <- 0.524
+cat("The number of hii that are greater than 0.5 is ", isTRUE(which(h_ii >0.5)))
+```
+ 
+```{r}
+
+plot(h_ii)
+points(green, h_ii[green], col="blue", pch=19)
+abline(h=0.05, col="red")
+abline(h=3*(13)/1353, col="green")
+abline(h=2*(13)/1353, col="orange")
+legend("topright", legend=c("hii=0.05 lignie ", "Velleman and Welsch", "Hoaglin and Welsch", "hii>0.05"), col=c("red", "green", "orange", "blue"), lty=1, pch=c(NA, NA, NA, 19))
+```
+ 
+
+
+
+## Distance de Cook
+
+Examinons maintenant l’influence des observations à l’aide de la distance de Cook réalisée en R avec la fonction cooks.distance. Le seule souhaitable est $f_{p+1,n-(p+1}(0.1)=0.524$ ou $p+1=13$ et $n=1353$ et il est largement superior a tour les observations. On peut concluire que le jeu de donnès est bonne.
+
+
+```{r, echo=FALSE}
+plot(cooks.distance(res),type="h",ylab="Distance de Cook")
+#abline(h = p, col = "red")
+
+maximumcook <- which.max(cooks.distance(res))
+text(maximumcook, cooks.distance(res)[maximumcook], row.names(ozone)[maximumcook], col="blue")
+```
+
+
+ 
+
+<!--
+## Elminer
+
+A ELIMINAR LA PLUS ELEVER Y COMENZAR POR ESA, quitando del modelo.
+
+Quelques observations ont une distance de Cook supérieure aux autres observations, mais il ne semble pas à
+y avoir des observations très influentes. De plus, le seuil fp+1,n−(p+1)(0.1) = 0.524 et il est supérieur à toutes
+les observations.-->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Recherche du meilleur Modèle {.tabset}
+
+Comme nous l’avons vu en cours, il existe de nombreux critères différents pour comparer plusieurs modèles entre eux et sélectionner le “plus performant” (la performance étant parfois définie de manière différente selon les critères). Les critères de sélection sont:
+
+
+ * Le $R^{2}$ ajusté (qui est founi par la fonction summary).
+ * Le critère d’information d’Akaike.
+ * Le critèere du BIC.
+
+
+
+
+
+## Best model in terms of the ```SCR```
+
+Le tableau suivant nous montre le meilleur modèle (en ce qui concerne le terme ```SCR```) de taille $k\in \{1,  \cdots, 10  \}$. Par exemple, dans ce cas-ci, puisque la première ligne est entièrement fausse, cela signifie qu’il n’y a pas de variable prédictive qui peut expliquer ```maxO3```. Mais avec $k=2$ nous avons que le meilleur modèle est
+
+
+$$maxO3 = \hat{\beta}_{0} + \hat{\beta}_{8} Ne12$$
+
+```{r, echo=FALSE}
+recherche.ex <- regsubsets(maxO3~.,int=T,nbest=1,nvmax=10,
+method="exhaustive",really.big=T,data=ozone)
+rs <- summary(recherche.ex)
+
+
+```
+
+ * Le but est de comparer les modèles entre eux, pour cela nous calculons le ```BIC```, 
+le ```$R^{2}$``` et la méthode ```AIC```.  
+
+
+```{r, echo=FALSE}
+table <- rs$which
+
+kable(table, caption="", booktabs = TRUE, valign = 't') %>% kable_styling(latex_options = "striped") 
+```
+
+
+
+
+
+## Critère AIC
+
+
+ * À partir du graphique suivant, nous pouvons voir que le modèle qui convient le mieux à nos données est celui qui comporte $7$ variables (representer par darkblue), puisque c’est celui qui a la plus petite valeur pour ```AIC```.
+
+
+```{r, echo=FALSE}
+#AIC = 2*(1:12) + n * log((rs$rss)/n) 
+#AIC
+#plot(AIC ~ I(1:12), xlab= "Number of Predictions", ylab="AIC")
+
+AIC_values <- c()
+for (i in 1:length(rs$rsq)) {
+  AIC_values[i] <- nrow(ozone) * log(rs$rss[i]/nrow(ozone)) + 2 * sum(rs$which[i,])
+}
+
+minimum <- which.min(AIC_values) 
+
+
+```
+
+```{r}
+
+plot(AIC_values ~ seq_along(rs$rsq), xlab = "Number of Predictors", ylab = "AIC", col="blue")
+points(minimum, AIC_values[minimum], col="darkblue", pch=19)
+
+legend("topright", legend="Minimum AIC", col="darkblue", pch=19)
+```
+
+
+ * Nous pouvons confirmer ce que nous avons vu dans le graphique ci-dessus avec la fonction  ```step```. Pour ce cas ici on va a spécifier l’option $k=2$:
+
+```{r, echo=FALSE}
+res.aic <- step(res,k=2)
+summary(res.aic)
+```
+
+
+ * Dans ce cas, le modèle avec le AIC le plus bas est 
+$$
+\left( \mathcal{M}_{A I C} \right): \quad \operatorname{maxO} 3=\beta_0 + \beta_01 T 6+ \beta_2 T 12+ \beta_3 N e 9+ \beta_4 N e 12+ \beta_5 N e 15+ \beta_6 V x+ \beta_6 \max O 3 v+\varepsilon
+$$
+
+oü $AIC=7434.99$. 
+
+
+## Critère BIC
+
+  * À partir du graphique suivant, nous pouvons voir que le modèle qui convient le mieux à nos données est celui qui comporte 5 variables (representer par darkblue), puisque c’est celui qui a la plus petite valeur pour BIC.
+ 
+```{r, echo=FALSE}
+n <- nrow(ozone)
+
+BIC <- log(n)*(1:12) + n * log(rs$rss/n)
+
+
+minBIC <- which.min(BIC)
+
+
+
+
+```
+ 
+ 
+ 
+```{r}
+plot(BIC ~ I(1:12), xlab="Number of Predictors", ylab="BIC", col="blue")
+
+
+points(minBIC, BIC[minBIC], col="darkblue", pch=19)
+legend("topright", legend="Minimum BIC", col="darkblue", pch=19)
+```
+
+ 
+```{r, echo=FALSE}
+plot(recherche.ex,scale="bic", main="Recherche exhaustive, critere du BIC")
+```
+
+Nous pouvons observer que le nombre minimum de ```BIC``` est au nombre de prédicteurs, comme nous pouvons le confirmer plus tard.
+
+ * Pour le critère BIC, il faut spécifier l'option $\mathrm{k}=\log (\mathrm{n})$ :
+
+```{r, echo=FALSE}
+n <- nrow(ozone)
+res.bic <- step(res,k=log(n))
+rs1 <- summary(res.bic)
+
+table1 <- rs1$which
+kable(table1, caption="", booktabs = TRUE, valign = 't') %>% kable_styling(latex_options = "striped") 
+
+```
+
+
+ * Dans ce cas, le modèle avec le BIC le plus bas est 
+ 
+$$\left(\mathcal{M}_{B I C}\right): \quad \max O 3=\beta_0+\beta_1 * T 6+\beta_2 * T 12+\beta_3 * N e 12+\beta_4 * V x+\beta_5 * \max O 3 v+\varepsilon$$
+
+oü $BIC=7473.16$. 
+
+
+
+## Critère de la maximisation du $R^{2}_{a}$
+
+
+ * À partir du graphique suivant, nous pouvons voir que le modèle qui convient le mieux à nos données est celui qui comporte 8 variables (representer par darkblue), puisque c’est celui qui a la plus gran valeur pour R-squared adjusted:
+ 
+ 
+```{r}
+
+maximo <- which.max(rs$adjr2)
+
+
+plot(1:10, rs$adjr2, xlab="Number of Predictions", ylab="Adjusted R-squared", col="blue")
+points(maximo, rs$adjr2[maximo], col="darkblue", pch=19)
+legend("bottomright", legend="Maximum R-squared adjusted", col="darkblue", pch=19)
+```
+ 
+ 
+```{r}
+plot(recherche.ex,scale="adjr2",main="Recherche exhaustive, critere du R^2 ajuste")
+```
+
+
+* Le modèle retenu est:
+
+$$
+\left(\mathcal{M}_{R_a^2}\right): \quad \operatorname{maxO} O=\beta_0+\beta_1 * T 6+\beta_2 * T 12+\beta_3 * T 15+\beta_4 * N e 9+\beta_5 * N e 12+\beta_6 * V x+\beta_7 * \max O 3 v+\varepsilon
+$$
+
+
+```{r, echo=FALSE}
+rs$adjr2
+max(rs$adjr2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Apprentissage-validation {.tabset}
+
+
+Nous allons partager de façon aléatoire notre échantillon en deux sous-échantillons: échantillon d’apprentissage
+A (train) sur lequel nous allons entrainer notre modèle et l’échantillon de validation V (test) sur lequel nous
+allons tester le pouvoir prédictif du modèle
+
+
+```{r, echo=FALSE}
+##échantillon train, 66% de l'échantillon initial
+set.seed(1)
+n <- nrow(ozone)
+train <- sample(1:n,floor(0.66*n))
+test <- (-train)
+```
+
+
+## Echantillon d’apprentissage A(train)
+
+```{r, echo=FALSE}
+ozone.train <- ozone[train,]
+head(ozone.train)
+```
+
+
+## Echantillon de validation V (test)
+
+```{r, echo=FALSE}
+ozone.test <- ozone[test,]
+head(ozone.test)
+```
+
+
+## Entraine modele AIC
+
+```{r, echo=FALSE}
+##modèle AIC
+res1 <- lm(maxO3~ T6 + T12 + Ne9 + Ne12 + Ne15 + Vx + maxO3v, data=ozone.train)
+residualsAIC <- res1$coefficients
+head(res1)
+```
+
+
+## Entraine modele BIC
+
+```{r, echo=FALSE}
+##modèle BIC
+resBIC <- lm(maxO3~  T6 + T12 + Ne12  + Vx + maxO3v, data=ozone.train)
+residualsBIC <- resBIC$coefficients
+head(resBIC)
+```
+
+
+
+## Entraine modele AIC
+
+```{r, echo=FALSE}
+##modèle R2
+resRa <- lm(maxO3~ T6 + T12 +T15+ Ne9 + Ne12  + Vx + maxO3v, data=ozone.train)
+residualsRa <- resRa$coefficients
+head(resRa)
+```
+
+
+# Mean Squared Error {.tabset}
+
+Sur l’échantillon de validation, nous allons calculer pour chaqu’un de ces trois modèles, l’erreur quadratique
+moyenne définie comme:
+
+
+$$MSE=\frac{1}{n_V} \sum_{i=1}^{n_V}\left(y_i-\hat{y}_i\right)^2$$
+
+
+où $\hat{y}_{i}$ est la valeur prédite de $y_i$ pour i ∈ V un individu de l’échantillon de validation V . Cela veut dire que
+$\hat{y}_{i}=x_{i}^{\intercal} \hat{\beta}_{A}$ ou $x_{i}^{\intercal}$ est le vecteur de mesures des variables explicatives pour l’unité $i \in V$ 
+et $\hat{\beta}_{A}$ est obtenu à partir de l’échantillon apprentissage qui ne contient pas l’unité $i$, donc l’unité $i$ n’a pas participé à la
+construction de $\hat{\beta}_{A}$.
+
+## Fonction MSE
+
+```{r}
+MSE <- function(y, yhat) {
+  mse <- 1/length(y)*(sum((y - yhat)^2))
+  return(mse)
+}
+```
+
+
+```{r, include=FALSE, echo=FALSE}
+y.test <- ozone.test[,1]
+
+y.pred1 <- predict(res1,ozone.test)
+
+y.pred2 <- predict(resBIC,ozone.test)
+
+y.pred3 <- predict(resRa,ozone.test)
+
+
+MSE(y.test,y.pred1 )
+
+1/length(ozone.test[,1])*(sum((y.test-y.pred1)^2))
+
+y.pred2 <- predict(resBIC,ozone.test)
+1/length(ozone.test[,1])*(sum((y.test-y.pred2)^2))
+```
+
+
+
+
+## Different Valeurs de MSE par le methodes
+
+Dans ce cas, nous cherchons le modèle ayant le MSE le plus faible, et nous avons constaté que le minimum est représenté par $R_{a}^{2}$.
+
+```{r, echo=FALSE}
+#cat("The mean square error of the AIC is", mse(res1), "\n",  "\n")
+#cat("The mean square error of the BIC is", mse(resBIC), "\n", "\n")
+#cat("The mean square error of the R-squared adjusted is", mse(resRa))
+data <- data.frame(Method = c("AIC", "BIC", "R-squared adjusted"),
+                   Mean_Square_Error = c(MSE(y.test,y.pred1 ), MSE(y.test,y.pred2 ), MSE(y.test,y.pred3 )))
+
+kable(data, format = "markdown", col.names = c("Method", "Mean Square Error"))
+```
+
+
+
+## Graph de MSE
+
+
+D’après l’analyse des valeurs AIC, BIC et R au carré, nous avons déterminé que le modèle ayant la plus petite valeur MSE est la valeur R-carré ajustée des trois méthodes qui convient le mieux à nos données. Nous avons donc décidé de choisir ce modèle pour une analyse plus approfondie. La méthode R au carré est couramment utilisée comme mesure de l’adéquation pour les modèles de régression, car elle fournit une mesure de la mesure dans laquelle le modèle correspond aux données observées. Dans ce cas, le modèle ayant la plus petite valeur R au carré est probablement le mieux adapté à nos données. 
+
+
+```{r, echo=FALSE, echo=FALSE}
+#ggplot(data, aes(x = Method, y = Mean_Square_Error)) +
+ # geom_col(fill = "steelblue") +
+ # labs(title = "Mean Square Error by Method",
+  #     x = "Method",
+   #    y = "Mean Square Error") +
+  #geom_text(aes(label = round(Mean_Square_Error, 2)),
+    #        position = position_dodge(width = 0.9),
+     #       vjust = -0.5) +
+  #theme_minimal()
+
+
+#ggplot(data, aes(x = Method, y = Mean_Square_Error)) +
+ # geom_col(fill = "steelblue") +
+  #labs(title = "Mean Square Error by Method",
+   #    x = "Method",
+    #   y = "Mean Square Error (log scale)") +
+  #scale_y_log10() +
+  #geom_text(aes(label = round(Mean_Square_Error, 2)),
+    #        position = position_dodge(width = 0.9),
+     #       vjust = -0.5) +
+  #theme_minimal()
+
+
+
+#ggplot(data, aes(x = Method, y = Mean_Square_Error)) +
+ # geom_point(size = 3, color = "steelblue") +
+  #labs(title = "Mean Square Error by Method",
+   #    x = "Method",
+    #   y = "Mean Square Error") +
+  #geom_text(aes(label = round(Mean_Square_Error, 2)),
+   #         position = position_jitter(width = 0.2, height = 0.05)) +
+  #theme_minimal()
+
+
+
+```
+
+
+
+```{r}
+ggplot(data, aes(x = Method, y = Mean_Square_Error)) +
+  geom_point(size = 3, aes(color = Method)) +
+  labs(title = "Mean Square Error by Method",
+       x = "Method",
+       y = "Mean Square Error")+
+    geom_text(aes(label = round(Mean_Square_Error, 2)),
+                         position = position_jitter(width = 0.2, height = 0.05))+
+     geom_point(data = data[data$Method == "C",],
+                          aes(x = Method, y = Mean_Square_Error),
+                          size = 3, color = "red")+
+    geom_text(data = data[data$Method == "C",],
+                         aes(x = Method, y = Mean_Square_Error, label = "Method C"),
+                         hjust = -0.2, size = 4, color = "red")+
+    theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Ajustement du jeu de données {.tabset}
+
+
+On recommence las étapes de validation avec notre nouveau modèle:
+
+
+
+
+```{r, include=FALSE}
+model.ajuste<-ozone[c(1,2,4,5, 8,9,11,12)]
+attach(model.ajuste)
+
+```
+
+
+## Le modele R-squared adjusted
+
+Le modèle à considérer est le meilleur trouvé dans la section précédente et est le suivant:
+
+
+$$
+\left(M_{R_{a}^2}\right) : \quad \operatorname{maxO3v} =\beta_0+\beta_1 * T 6+\beta_2 * T 12+\beta_3 * T 15+\beta_4 * N e 9+\beta_5 * N e 12+\beta_6 * V x+\ beta_7 * \max O 3 v+\varepsilon
+$$
+
+```{r, echo=FALSE}
+resfinal <- lm(maxO3~ T6 + T12 +T15+ Ne9 + Ne12  + Vx + maxO3v, data=ozone)
+residualsfinal <- resfinal$coefficients
+summary(resfinal)
+```
+
+Dans ce cas, nous avons constaté que toutes les variables sont significatives. De plus, la valeur du coefficient de détermination $R^{2}$ est de $0,6885$ et le test de Fischer donne une valeur de $p-value: < 2,2e-16$, ce qui signifie que les variables sont bien expliquées.
+
+## Residus en fonction de valeurs ajustés
+
+Bien que nous puissions voir que les points ne présentent pas de schéma clair, nous ne pouvons pas conclure définitivement 
+que le modèle correspond bien. C’est parce que nous devons encore évaluer si les résidus sont normalement distribués.
+
+<!--Although we can see that the points do not exhibit any clear pattern, we cannot definitively conclude that the model 
+fits well. This is because we still need to assess whether the residuals are normally distributed.-->
+
+
+
+```{r}
+ggplot(data.frame(residuals = rstudent(resfinal), fitted = fitted(resfinal)), 
+       aes(x = fitted, y = residuals, color = abs(residuals))) +
+  geom_point() +
+  scale_color_gradient(low = "blue", high = "red", name = "Absolute Residuals") +
+  labs(x = "Fitted values", y = "Residuals", 
+       title = " ") +
+  theme_bw()
+```
+
+
+
+
+## Normalite de Residus
+
+Pour évaluer la normalité des résidus, nous allons générer un graphique QQ et corroborer les résultats avec les tests de Shapiro-Wilk et Kolmogorov-Smirnov.
+
+```{r, echo=FALSE}
+qqPlot(resfinal, main="Studentized Residuals R-squared Model" )
+```
+
+D’après le QQ-plot, il semble qu’il y ait une queue inférieure où un nombre important de points s’écartent encore de la 
+normalité. On peut donc en déduire que les résidus Studentized ne sont pas normalement distribués.
+
+
+* Shapito Test for Normality
+ 
+ Laisser les hyphotesis nuls et alternatifs comme suit :
+ 
+ $$ \begin{equation}
+\begin{split}
+H_{0} &: \text{les données sont normalement distribuées}\\
+H_{1} &: \text{les données ne sont pas normalement distribuées}
+\end{split}
+\end{equation}
+$$
+ 
+Nous effectuons un test Shapiro-Wilk pour tester la normalité des résidus comme suit
+
+```{r, echo=FALSE}
+resifinal <- residuals(resfinal)
+shapiro.test(resifinal)
+```
+
+Puisque votre p-value de $9.828e-08$ est bien inférieure à $0.05$, nous pouvons en déduire qu'il existe des preuves solides pour rejeter l'hypothèse nulle et conclure que vos données ne suivent pas une distribution normale.  
+
+ * Kolmogorov Test
+
+```{r, echo=FALSE}
+ks.test(resifinal, 'pnorm')
+```
+
+
+La valeur p du test de Kolmogorov est inférieure à 0,05, ce qui indique que les données ne sont pas normalement distribuées.
+
+
+## Studentized Residuals
+
+
+Les résidus étudiés en dehors de la plage de $[−2,2]$ peuvent indiquer des valeurs aberrantes potentielles ou des observations influentes qui ont une plus grande incidence sur l’ajustement du modèle. (outliers). 
+
+
+```{r}
+ggplot(data.frame(residuals = rstudent(resfinal)), aes(x = seq_along(residuals), y = residuals, color = abs(residuals))) +
+  geom_point() +
+  geom_hline(yintercept = c(-2, 2), linetype = "dashed", color = "red", size = 1) +
+  scale_color_gradient(low = "blue", high = "red", name = "Absolute Residuals") +
+  labs(x = "Observation", y = "Résidus studentisés par VC", title = "Studentized Residuals Plot with Horizontal Lines at -2 and 2") +
+  theme_bw()
+```
+
+## Histogram 
+
+ * La curve est etaler, et aussi les valeurs sont entre -60 et 60, pas de -2 et 2, donc ce n’est pas normal. 
+
+
+```{r}
+#hist(residuals(res),xlab="residus d estimation",main="Histogramme des residus",breaks=20)
+ggplot(data = data.frame(residuals = rstudent(resfinal)), aes(x = residuals)) +
+  geom_histogram(binwidth = 2, aes(y = ..density..), 
+                 color = "black", fill = "white") +
+  geom_density(alpha = 0.4, fill = "red") +
+  stat_function(fun = dnorm, args = list(mean = mean(residuals(res)), sd = sd(residuals(res))), color = "blue", linetype = "dashed", size = 1.5) +
+  labs(x = "Residuals", y = "Density", title = "Histogram of Residuals with Normal Distribution Curve") +
+  theme_bw()
+```
+
+
+À partir de cet histogramme, nous pouvons voir que les résidus normalisés suivent une distribution normale.
+
+
+
+
+## Comparison Distance de Cook dans le deux Modele
+
+
+
+ * D'après cette comparaison, nous pouvons constater que le point ayant la plus grande distance de Cook dans le nouveau modèle est passé de l'individu 104 à 627.
+
+
+
+```{r}
+par(mfrow=c(1,2))
+maximumcook <- which.max(cooks.distance(res))
+plot(cooks.distance(res),type="h",ylab="Distance de Cook",main = "Modele
+initial")
+text(maximumcook, cooks.distance(res)[maximumcook], row.names(ozone)[maximumcook], col="blue")
+maximumcook <- which.max(cooks.distance(resfinal))
+plot(cooks.distance(resfinal),type="h",ylab="Distance de Cook",main = "Modele R-squared")
+text(maximumcook, cooks.distance(resfinal)[maximumcook], row.names(ozone)[maximumcook], col="blue")
+```
+
+
+
+* Test de Breusch-Pagan par heteroscedasticity
+
+ $$ \begin{equation}
+\begin{split}
+H_{0} &: \text{the variance of the errors is constant (homoscedasticity)}\\
+H_{1} &: \text{the variance of the errors is not constant (heteroscedasticity)}
+\end{split}
+\end{equation}
+$$
+
+```{r, echo=FALSE}
+btest <- bptest(resfinal)
+btest
+```
+
+puisque les p-valeurs est 5.823e-06 moins que 0.05, nous rejetons l’hypothèse nulle et concluons qu’il y a des preuves d’hétéroscédasticité.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Removing the outliers {.tabset}
+
+
+Nous remarquons que même si nous choisissons le meilleur modèle en choisissant celui qui a le MSE minimum, nous n’avons toujours pas obtenu la normalité dans les résidus, pour cette raison Nous allons supprimer les points qui ont des résidus standardisés en dehors de l’intervalle $[-3,3]$, ce qui signifie ce qui suit et si nous atteignons la normalité,  Nous allons poursuivre notre analyse.
+
+
+
+
+
+
+## Standardized Residuals 
+
+
+Nous supprimerons le point qui a des résidus standardisés en dehors de l’intervalle $[-3,3]$, ce qui signifie les valeurs qui sont en dehors des lignes rouges pointées
+
+```{r}
+ggplot(data.frame(residuals = rstudent(resfinal)), aes(x = seq_along(residuals), y = residuals, color = abs(residuals))) +
+  geom_point() +
+  geom_hline(yintercept = c(-3, 3), linetype = "dashed", color = "red", size = 1) +
+  scale_color_gradient(low = "blue", high = "red", name = "Absolute Residuals") +
+  labs(x = "Observation", y = "Résidus studentisés par VC", title = "Studentized Residuals Plot with Horizontal Lines at -2 and 2") +
+  theme_bw()
+```
+
+
+
+```{r, include=FALSE}
+#i.e we will remove from out data set the following points:
+
+outliers <- which(rstudent(resfinal) > 3 | rstudent(resfinal) < -3)
+outliers
+
+ozone2 <- ozone[-outliers, ]
+ozone2
+
+```
+
+
+
+## New Model (without the Outliers)
+
+
+
+Nous considérons le même modèle où nous remontons des données de outliers 
+
+
+```{r, echo=FALSE}
+resfinal1 <- lm(maxO3~ T6 + T12 +T15+ Ne9 + Ne12  + Vx + maxO3v, data=ozone2)
+summary(resfinal1)
+resifinal1 <- residuals(resfinal1)
+
+```
+
+
+
+## Corplot
+
+
+De la comparaison des graphiques de corrélation, il semble qu'il n'y ait pas de différence significative entre eux. Cependant, il est important de noter que lorsqu'on analyse les données complètes, les résidus ne suivent pas une distribution normale. En revanche, lorsque les valeurs aberrantes sont supprimées, les résidus tendent à présenter une normalité. Par conséquent, la suppression des valeurs aberrantes peut améliorer la qualité de l'analyse en rendant l'hypothèse de normalité plus plausible.
+
+```{r, echo=FALSE}
+par(mfrow=c(1,2))
+corrplot(cor(ozone.train), method = "ellipse" , type = "lower", order = "hclust")
+title("Ozone Train Data", line = 2.5)
+corrplot(cor(ozone2), method = "ellipse" , type = "lower", order = "hclust",)
+title("Ozone Train Data without outliers", line = 2.5)
+
+
+```
+
+
+## Studentized Residuals 
+
+Les résidus studentisés ont le graphique suivant:
+
+```{r}
+
+ggplot(data.frame(residuals = rstudent(resfinal1)), aes(x = seq_along(residuals), y = residuals, color = abs(residuals))) +
+  geom_point() +
+  geom_hline(yintercept = c(-3, 3), linetype = "dashed", color = "red", size = 1) +
+  scale_color_gradient(low = "blue", high = "red", name = "Absolute Residuals") +
+  labs(x = "Observation", y = "Résidus studentisés par VC", title = "Studentized Residuals Plot with Horizontal Lines at -2 and 2") +
+  theme_bw()
+
+```
+
+Dans ce graphique, il est évident que tous les résidus se situent dans la plage de -3 et 3.
+
+## Normality Comparison 
+
+Nous pouvons maintenant voir une différence par rapport au QQ-plot dans le modèle initial et dans les modèles finaux où nous supprimons les valeurs aberrantes. Nous poursuivrons notre analyse avec ce modèle.
+
+
+```{r, echo=FALSE}
+par(mfrow=c(1,2))
+qqPlot(res, main="Studentized Residuals Initial" )
+qqPlot(resfinal1, main = "Studentized Residuals R-squared ")
+```
+
+
+
+
+```{r}
+#hist(residuals(res),xlab="residus d estimation",main="Histogramme des residus",breaks=20)
+par(mfrow=c(1,2))
+ggplot(data = data.frame(residuals = residuals(resfinal1)), aes(x = residuals)) +
+  geom_histogram(binwidth = 2, aes(y = ..density..), 
+                 color = "black", fill = "white") +
+  geom_density(alpha = 0.4, fill = "red") +
+  stat_function(fun = dnorm, args = list(mean = mean(residuals(res)), sd = sd(residuals(res))), color = "blue", linetype = "dashed", size = 1.5) +
+  labs(x = "Residuals", y = "Density", title = "Histogram of Residuals with Normal Distribution Curve") +
+  theme_bw()
+ggplot(data = data.frame(residuals = rstudent(resfinal1)), aes(x = residuals)) +
+  geom_histogram(binwidth = 2, aes(y = ..density..), 
+                 color = "black", fill = "white") +
+  geom_density(alpha = 0.4, fill = "red") +
+  stat_function(fun = dnorm, args = list(mean = mean(residuals(res)), sd = sd(residuals(res))), color = "blue", linetype = "dashed", size = 1.5) +
+  labs(x = "Residuals", y = "Density", title = "Histogram of the Studentized Residuals with Normal Distribution Curve") +
+  theme_bw()
+```
+
+
+
+## Comparison Distance de Cook dans le deux Modele
+
+En se basant sur le graphique, il est évident que l'individu 627 présente toujours une distance de Cook plus élevée dans le R carré et le R carré sans les valeurs aberrantes, tandis que le nombre de points de forte influence a diminué.
+
+
+```{r, echo=FALSE}
+par(mfrow=c(1,3))
+maximumcook <- which.max(cooks.distance(res))
+plot(cooks.distance(res),type="h",ylab="Distance de Cook",main = "Modele
+initial")
+
+text(maximumcook, cooks.distance(res)[maximumcook], row.names(ozone)[maximumcook], col="blue")
+maximumcook <- which.max(cooks.distance(resfinal))
+plot(cooks.distance(resfinal),type="h",ylab="Distance de Cook",main = "Modele R squared")
+text(maximumcook, cooks.distance(resfinal)[maximumcook], row.names(ozone)[maximumcook], col="blue")
+
+maximumcook3 <- which.max(cooks.distance(resfinal1))
+plot(cooks.distance(resfinal1),type="h",ylab="Distance de Cook",main = "Modele final ")
+text(maximumcook3, cooks.distance(resfinal1)[maximumcook3], row.names(ozone2)[maximumcook3], col="blue")
+```
+
+
+# Conclusion 
+
+ * Dans les grands échantillons (p. ex., lorsque le nombre d’observations par variable est supérieur à 10), les violations de cette hypothèse de normalité n’ont souvent pas d’incidence notable sur les résultats. 
+ 
+ * Nous avons sélectionné le meilleur modèle en fonction du coefficient de détermination ajusté (R carré ajusté), car il a donné la valeur la plus faible pour l'erreur quadratique moyenne (MSE).
+
+ * La suppression des valeurs aberrantes peut améliorer la normalité des résidus, ce qui est une hypothèse importante pour de nombreuses analyses statistiques.
+
+
+# Questions
+
+ * Comment nous pouvons supprimer certaines personnes afin d’obtenir des résidus normaux?
+ 
+ * Pourquoi obtient-on des résultats indiquant que les résidus ne suivent pas une distribution normale selon les tests de Shapiro ou de Kolmogorov, alors que le QQ-plot montre que les résidus suivent une distribution normale ?
+ 
+ * Puis-je utiliser le test Breusch-Pagan pour vérifier l’hétéroscédasticité de mes données ?
+ 
+ 
